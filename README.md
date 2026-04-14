@@ -26,10 +26,6 @@ SearchSphere AI is an intelligent navigation system that demonstrates how AI alg
 3. Choose an algorithm
 4. View path and animation
 
-##  Screenshots
-
-(Add your screenshots here)
-
 ##  Technologies Used
 
 * Python
