@@ -1,6 +1,4 @@
-# SearchSphere-AI
-AI-based smart navigation system using BFS, DFS, and A* 
-#  SearchSphere AI
+ #  SearchSphere AI
 
 SearchSphere AI is an intelligent navigation system that demonstrates how AI algorithms like BFS, DFS, and A* are used to find optimal paths in a map-like environment.
 
