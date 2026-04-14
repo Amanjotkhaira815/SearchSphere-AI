@@ -1,0 +1,243 @@
+import tkinter as tk
+import heapq
+import random
+import time
+
+CELL_SIZE = 25
+ROWS = 20
+COLS = 20
+
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("SearchSphere AI - Smart Map Navigator")
+
+        self.dark_mode = False
+
+        self.canvas = tk.Canvas(root, width=COLS*CELL_SIZE, height=ROWS*CELL_SIZE)
+        self.canvas.grid(row=0, column=1, padx=10, pady=10)
+
+        self.grid = [[0 for _ in range(COLS)] for _ in range(ROWS)]
+        self.start = None
+        self.end = None
+        self.traffic = {}
+        self.landmarks = {}
+
+        self.landmark_types = ["School", "Hospital", "Building", "Shop", "Petrol"]
+
+        # NEW: Place names
+        self.place_names = {
+            "School": ["Sunshine School", "Green Valley School"],
+            "Hospital": ["City Hospital", "LifeCare Clinic"],
+            "Building": ["Green Plaza", "Sky Tower"],
+            "Shop": ["Shivjot Dhaba", "Fresh Mart"],
+            "Petrol": ["HP Petrol Pump", "Indian Oil Station"]
+        }
+
+        self.generate_landmarks()
+
+        self.canvas.bind("<Button-1>", self.on_click)
+
+        frame = tk.Frame(root, bg="#2c3e50")
+        frame.grid(row=0, column=0, sticky="ns")
+
+        def btn(text, cmd):
+            return tk.Button(frame, text=text, command=cmd, bg="#34495e", fg="white", relief="flat")
+
+        btn("Set Start", lambda: self.set_mode("start")).pack(fill="x", pady=2)
+        btn("Set End", lambda: self.set_mode("end")).pack(fill="x", pady=2)
+        btn("Obstacle", lambda: self.set_mode("obstacle")).pack(fill="x", pady=2)
+        btn("Traffic", lambda: self.set_mode("traffic")).pack(fill="x", pady=2)
+
+        btn("Run BFS", self.run_bfs).pack(fill="x", pady=2)
+        btn("Run DFS", self.run_dfs).pack(fill="x", pady=2)
+        btn("Run A*", self.run_astar).pack(fill="x", pady=2)
+
+        btn("Random Map", self.random_map).pack(fill="x", pady=2)
+        btn("Reset", self.reset).pack(fill="x", pady=2)
+        btn("Toggle Day/Night", self.toggle_theme).pack(fill="x", pady=2)
+
+        self.mode = None
+        self.draw_grid()
+
+    def generate_landmarks(self):
+        self.landmarks.clear()
+        for r in range(ROWS):
+            for c in range(COLS):
+                if random.random() < 0.1:
+                    place_type = random.choice(self.landmark_types)
+                    name = random.choice(self.place_names[place_type])
+                    self.landmarks[(r,c)] = (place_type, name)
+
+    def draw_grid(self):
+        self.canvas.delete("all")
+        bg = "#1e1e1e" if self.dark_mode else "white"
+        self.canvas.config(bg=bg)
+
+        for r in range(ROWS):
+            for c in range(COLS):
+                color = "#ecf0f1" if not self.dark_mode else "#2c3e50"
+
+                if self.grid[r][c] == 1:
+                    color = "black"
+                elif (r,c) in self.traffic:
+                    color = "orange"
+                elif (r,c) in self.landmarks:
+                    place_type, name = self.landmarks[(r,c)]
+
+                    if place_type == "School":
+                        color = "#3498db"; label = "S"
+                    elif place_type == "Hospital":
+                        color = "#e74c3c"; label = "H"
+                    elif place_type == "Building":
+                        color = "#95a5a6"; label = "B"
+                    elif place_type == "Shop":
+                        color = "#f1c40f"; label = "$"
+                    elif place_type == "Petrol":
+                        color = "#9b59b6"; label = "P"
+
+                    self.canvas.create_rectangle(c*CELL_SIZE, r*CELL_SIZE,
+                                                 (c+1)*CELL_SIZE, (r+1)*CELL_SIZE,
+                                                 fill=color, outline="gray")
+
+                    self.canvas.create_text(c*CELL_SIZE+12, r*CELL_SIZE+10,
+                                            text=label, fill="white", font=("Arial", 8, "bold"))
+
+                    short_name = name.split()[0]
+                    self.canvas.create_text(c*CELL_SIZE+12, r*CELL_SIZE+18,
+                                            text=short_name, fill="black", font=("Arial", 6))
+                    continue
+
+                if self.start == (r,c):
+                    color = "green"
+                elif self.end == (r,c):
+                    color = "red"
+
+                self.canvas.create_rectangle(c*CELL_SIZE, r*CELL_SIZE,
+                                             (c+1)*CELL_SIZE, (r+1)*CELL_SIZE,
+                                             fill=color, outline="gray")
+
+    def on_click(self, event):
+        r = event.y // CELL_SIZE
+        c = event.x // CELL_SIZE
+
+        if self.mode == "start":
+            self.start = (r,c)
+        elif self.mode == "end":
+            self.end = (r,c)
+        elif self.mode == "obstacle":
+            self.grid[r][c] = 1
+        elif self.mode == "traffic":
+            self.traffic[(r,c)] = random.randint(2,5)
+
+        self.draw_grid()
+
+    def set_mode(self, mode):
+        self.mode = mode
+
+    def neighbors(self, r, c):
+        for dr, dc in [(1,0),(-1,0),(0,1),(0,-1)]:
+            nr, nc = r+dr, c+dc
+            if 0 <= nr < ROWS and 0 <= nc < COLS and self.grid[nr][nc] == 0:
+                yield (nr, nc)
+
+    def animate_path(self, path):
+        for r,c in path:
+            self.draw_grid()
+
+            x = c * CELL_SIZE
+            y = r * CELL_SIZE
+
+            # Car shape
+            self.canvas.create_rectangle(x+4, y+8, x+21, y+18, fill="blue")
+            self.canvas.create_rectangle(x+7, y+5, x+18, y+10, fill="skyblue")
+            self.canvas.create_oval(x+5, y+17, x+9, y+21, fill="black")
+            self.canvas.create_oval(x+16, y+17, x+20, y+21, fill="black")
+
+            self.root.update()
+            time.sleep(0.1)
+
+    def reconstruct(self, parent, end):
+        path = []
+        while end in parent:
+            path.append(end)
+            end = parent[end]
+        return path[::-1]
+
+    def run_bfs(self):
+        from collections import deque
+        queue = deque([self.start])
+        visited = set([self.start])
+        parent = {}
+
+        while queue:
+            node = queue.popleft()
+            if node == self.end:
+                self.animate_path(self.reconstruct(parent, node))
+                return
+            for nei in self.neighbors(*node):
+                if nei not in visited:
+                    visited.add(nei)
+                    parent[nei] = node
+                    queue.append(nei)
+
+    def run_dfs(self):
+        stack = [self.start]
+        visited = set([self.start])
+        parent = {}
+
+        while stack:
+            node = stack.pop()
+            if node == self.end:
+                self.animate_path(self.reconstruct(parent, node))
+                return
+            for nei in self.neighbors(*node):
+                if nei not in visited:
+                    visited.add(nei)
+                    parent[nei] = node
+                    stack.append(nei)
+
+    def heuristic(self, a, b):
+        return abs(a[0]-b[0]) + abs(a[1]-b[1])
+
+    def run_astar(self):
+        open_set = []
+        heapq.heappush(open_set, (0, self.start))
+        g = {self.start: 0}
+        parent = {}
+
+        while open_set:
+            _, current = heapq.heappop(open_set)
+            if current == self.end:
+                self.animate_path(self.reconstruct(parent, current))
+                return
+
+            for nei in self.neighbors(*current):
+                cost = g[current] + self.traffic.get(nei, 1)
+                if nei not in g or cost < g[nei]:
+                    g[nei] = cost
+                    f = cost + self.heuristic(nei, self.end)
+                    heapq.heappush(open_set, (f, nei))
+                    parent[nei] = current
+
+    def random_map(self):
+        self.grid = [[0 if random.random()>0.2 else 1 for _ in range(COLS)] for _ in range(ROWS)]
+        self.traffic.clear()
+        self.generate_landmarks()
+        self.draw_grid()
+
+    def reset(self):
+        self.grid = [[0 for _ in range(COLS)] for _ in range(ROWS)]
+        self.start = None
+        self.end = None
+        self.traffic.clear()
+        self.generate_landmarks()
+        self.draw_grid()
+
+    def toggle_theme(self):
+        self.dark_mode = not self.dark_mode
+        self.draw_grid()
+
+root = tk.Tk()
+app = App(root)
+root.mainloop()
